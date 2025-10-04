@@ -15,6 +15,7 @@ import asyncio
 
 # Завантаження датасету діабету (Pima Indians)
 from sklearn.datasets import load_diabetes
+
 async def generate_synthetic_data(n_samples):
     return {
         'Вагітності': np.random.randint(0, 15, n_samples),
@@ -163,9 +164,7 @@ def run_diabetes_detect():
     print("\n=== ВАЖЛИВІСТЬ ОЗНАК ===")
     print(feature_importance)
 
-    # draw_visuals(df, y_test, y_pred_lr, y_pred_rf, y_pred_proba_lr, y_pred_proba_rf, feature_importance)
-
-
+    draw_visuals(df, y_test, y_pred_lr, y_pred_rf, y_pred_proba_lr, y_pred_proba_rf, feature_importance)
 
     print("\n=== ПРИКЛАД ПРОГНОЗУВАННЯ ===")
     new_patient = pd.DataFrame({
@@ -191,7 +190,6 @@ def run_diabetes_detect():
 
 def main():
     run_diabetes_detect()
-
 
 if __name__ == '__main__':
     main()
