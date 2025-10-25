@@ -3,85 +3,133 @@
 Використовуємо веб-камеру, YOLOv5 для детекції та ResNet50 для класифікації
 """
 
-import torch # бібліотека для роботи з нейронними мережами
-import torchvision.transforms as transforms # трансформації зображень
-import torchvision.models as models # попередньо навчені моделі
-import cv2 # бібліотека для обробки зображень та відео
-import requests # для завантаження файлів з інтернету
-import numpy as np # для роботи з масивами
-import time # для вимірювання часу
+import torch
+import torchvision.transforms as transforms
+import torchvision.models as models
+import cv2
+import requests
+import time
+import numpy as np
 
-# Завантаження моделі YOLOv5 для детекції об'єктів
-print("Завантаження моделі YOLOv5...")
+# Завантажуємо YOLOv5 для детекції об'єктів
+print("🔄 Завантаження моделі YOLOv5...")
 yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
-yolo_model.eval() # встановлення моделі в режим оцінки
+yolo_model.eval()
 
-# Завантаження моделі ResNet50 для класифікації об'єктів
-print("Завантаження моделі ResNet50...")
+# Завантажуємо ResNet50 для класифікації
+print("🔄 Завантаження моделі ResNet50...")
 model = models.resnet50(pretrained=True)
-model.eval() # встановлення моделі в режим оцінки
+model.eval()
 
-# Визначаємо GPU, якщо доступна
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# Переміщуємо моделі на GPU якщо доступно
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 yolo_model = yolo_model.to(device)
+print(f"✅ Моделі завантажені на: {device}")
 
-# Завантаження міток класів ImageNet
+# Завантажуємо мітки класів ImageNet
 LABELS_URL = "https://raw.githubusercontent.com/anishathalye/imagenet-simple-labels/master/imagenet-simple-labels.json"
 labels = requests.get(LABELS_URL).json()
 
-# Трансформації кадрів для відео
+# Підготовка трансформацій для кадрів відео
 transform = transforms.Compose([
-    transforms.ToPILImage(), # конвертація в PIL Image (зручний формат для трансформацій)
-    transforms.Resize(256), # зміна розміру до 256x256
-    transforms.CenterCrop(224), # центральне обрізання до 224x224
-    transforms.ToTensor(), # конвертація в тензор
-    transforms.Normalize( # нормалізація зображення
+    transforms.ToPILImage(),
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225]
     )
 ])
 
+
 def predict_frame(frame):
-    """Розпізнання об'єктів на кадрі відео"""
-    # Конвертація кадру з BGR в RGB
+    """
+    Розпізнає об'єкт на одному кадрі відео
+
+    Args:
+        frame: кадр з відео (numpy array)
+
+    Returns:
+        top_class: назва класу з найвищою ймовірністю
+        confidence: впевненість у відсотках
+    """
+    # Конвертуємо BGR (OpenCV) в RGB
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    # Застуємо трансформації
-    img_tensor = transform(frame_rgb).unsqueeze(0).to(device) # додавання батч розміру та переміщення на пристрій
+    # Застосовуємо трансформації
+    img_tensor = transform(frame_rgb).unsqueeze(0).to(device)
 
-    # Робимо передбачення з ResNet50
+    # Робимо передбачення
     with torch.no_grad():
         outputs = model(img_tensor)
 
-    # Отримує ймовірності
+    # Отримуємо ймовірності
     probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
 
-    # Отримуємо найкраще передбачення
+    # Знаходимо клас з найвищою ймовірністю
     top_prob, top_idx = torch.max(probabilities, 0)
 
     top_class = labels[top_idx.item()]
-    confidence = top_prob.item() * 100 # точність у відсотках
+    confidence = top_prob.item() * 100
 
     return top_class, confidence
 
+
+def draw_text_with_background(frame, text, position, font_scale=0.8, thickness=2):
+    """
+    Малює текст з напівпрозорим фоном для кращої читабельності
+    """
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    # Отримуємо розмір тексту
+    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+
+    x, y = position
+    # Малюємо напівпрозорий прямокутник
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x - 10, y - text_height - 15),
+                  (x + text_width + 10, y + 5), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
+    # Малюємо текст
+    cv2.putText(frame, text, (x, y - 5), font, font_scale, (0, 255, 0), thickness)
+
+
+
+
 def run_realtime_detection(camera_id=0, confidence_threshold=0.3):
-    # Відкриваємо відеопотік з веб-камери
+    """
+    Запускає розпізнавання об'єктів в реальному часі з виділенням рамками
+
+    Args:
+        camera_id: ID камери (зазвичай 0 для вбудованої веб-камери)
+        confidence_threshold: мінімальна впевненість для відображення (0-1)
+    """
+    # Відкриваємо відео потік
     cap = cv2.VideoCapture(camera_id)
 
     if not cap.isOpened():
-        print("Не вдалося відкрити камеру.")
+        print("❌ Помилка: Не вдалося відкрити камеру")
         return
 
-    #  Встановлюємо розмір кадру
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    # Встановлюємо розмір кадру
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
-    print("Початок розпізнавання об'єктів. Натисніть 'q' для виходу.")
+    print("\n" + "=" * 60)
+    print("🎥 РОЗПІЗНАВАННЯ ОБ'ЄКТІВ В РЕАЛЬНОМУ ЧАСІ")
+    print("=" * 60)
+    print("📌 Натисніть 'q' для виходу")
+    print("📌 Натисніть 's' для збереження скріншоту")
+    print("=" * 60 + "\n")
 
     fps_start_time = time.time()
     fps_counter = 0
     fps = 0
+
+    screenshot_counter = 0
 
     # Кольори для різних класів об'єктів
     colors = [
@@ -94,56 +142,65 @@ def run_realtime_detection(camera_id=0, confidence_threshold=0.3):
     ]
 
     while True:
-        ret, frame = cap.read() # зчитування кадру
+        ret, frame = cap.read()
+
         if not ret:
-            print("Не вдалося отримати кадр з камери.")
+            print("❌ Помилка читання кадру")
             break
 
-        # Детекція зображення за допомогою YOLOv5
+        # Детекція об'єктів за допомогою YOLO
         try:
             results = yolo_model(frame)
-            detections = results.panads().xyxy[0] # отримання детекцій
+            detections = results.pandas().xyxy[0]  # Отримуємо результати у форматі pandas
 
-            # Обробка кожної детекції
+            # Обробляємо кожен виявлений об'єкт
             for idx, detection in detections.iterrows():
-                confidence = detection["confidence"]
+                confidence = detection['confidence']
+
+                # Пропускаємо об'єкти з низькою впевненістю
                 if confidence < confidence_threshold:
                     continue
 
-                # Координати координати рамки
-                x1, y1, x2, y2 = int(detection["xmin"]), int(detection["ymin"]), int(detection["xmax"]), int(detection["ymax"])
+                # Отримуємо координати рамки
+                x1, y1, x2, y2 = int(detection['xmin']), int(detection['ymin']), \
+                    int(detection['xmax']), int(detection['ymax'])
 
-                # Отримуємо найменування класу
-                class_name = detection["name"]
+                # Отримуємо назву класу
+                class_name = detection['name']
 
                 # Вибираємо колір для рамки
-                calor = colors[idx % len(colors)]
+                color = colors[idx % len(colors)]
 
                 # Малюємо рамку навколо об'єкта
-                cv2.rectangle(frame, (x1, y1), (x2, y2), calor, 2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-                # Підготовуємо текст для відображення
-                label = f"{class_name} -- {confidence:.2f}"
+                # Підготовка тексту з назвою та впевненістю
+                label = f"{class_name}: {confidence:.2f}"
 
                 # Малюємо фон для тексту
-                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                cv2.rectangle(frame, (x1, y1 - text_height - baseline), (x1 + text_width, y1), calor, -1)
+                (text_width, text_height), baseline = cv2.getTextSize(
+                    label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2
+                )
 
-                # Малюємо текст
-                cv2.putText(frame, label, (x1, y1 - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                # Фон для тексту
+                cv2.rectangle(frame, (x1, y1 - text_height - 10),
+                              (x1 + text_width + 5, y1), color, -1)
 
+                # Текст
+                cv2.putText(frame, label, (x1 + 2, y1 - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-        except Exception  as e:
+        except Exception as e:
             print(f"Помилка детекції: {e}")
-            continue
 
+        # Обчислюємо FPS
         fps_counter += 1
-        if (time.time() - fps_start_time) >= 1.0:
+        if time.time() - fps_start_time >= 1.0:
             fps = fps_counter
             fps_counter = 0
             fps_start_time = time.time()
 
-        # Відображення FPS на кадрі
+        # Відображаємо FPS з фоном
         fps_text = f"FPS: {fps}"
         (text_width, text_height), _ = cv2.getTextSize(
             fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
@@ -154,30 +211,45 @@ def run_realtime_detection(camera_id=0, confidence_threshold=0.3):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
         # Відображаємо інструкції
-        cv2.putText(frame, "Natysni 'q' - vyhid",
+        cv2.putText(frame, "Natysni 'q' - vyhid, 's' - screenshot",
                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
                     0.5, (255, 255, 255), 1)
 
-        # Відображення кадру
-        cv2.imshow('Real-Time Object Detection', frame)
+        # Показуємо кадр
+        cv2.imshow('Rozpiznavannya ob\'yektiv z vydilennyam', frame)
 
-        # Вихід з циклу при натисканні 'q'
+        # Обробка клавіш
         key = cv2.waitKey(1) & 0xFF
 
         if key == ord('q'):
-            print("Вихід з програми.")
+            print("\n👋 Завершення роботи...")
             break
+        elif key == ord('s'):
+            screenshot_counter += 1
+            filename = f"screenshot_{screenshot_counter}.jpg"
+            cv2.imwrite(filename, frame)
+            print(f"📸 Скріншот збережено: {filename}")
 
-    # Звільнення ресурсів
+    # Звільняємо ресурси
     cap.release()
     cv2.destroyAllWindows()
-    print("Програма завершила роботу.")
+    print("✅ Робота завершена")
 
 
+# ============================================
+# ЗАПУСК ПРОГРАМИ
+# ============================================
 
-def main():
-   print("Hello, World!")
+if __name__ == "__main__":
+    print("\n" + "=" * 60)
+    print("  РОЗПІЗНАВАННЯ ОБ'ЄКТІВ З ВЕБ-КАМЕРИ З ВИДІЛЕННЯМ")
+    print("=" * 60)
 
+    try:
+        # Запуск з веб-камерою
+        run_realtime_detection(camera_id=2, confidence_threshold=0.1)
 
-if __name__ == '__main__':
-    main()
+    except KeyboardInterrupt:
+        print("\n\n👋 Програма перервана користувачем")
+    except Exception as e:
+        print(f"\n❌ Помилка: {e}")
