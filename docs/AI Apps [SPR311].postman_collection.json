@@ -1,0 +1,143 @@
+{
+	"info": {
+		"_postman_id": "2a08322c-01e0-4caa-9bb7-0272ec7d7a93",
+		"name": "AI Apps [SPR311]",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "32590352",
+		"_collection_link": "https://unisoft-dev-team.postman.co/workspace/UniSoft-Workspace~0003adf2-049b-46bb-81bb-7560636386d8/collection/32590352-2a08322c-01e0-4caa-9bb7-0272ec7d7a93?action=share&source=collection_link&creator=32590352"
+	},
+	"item": [
+		{
+			"name": "Ollama",
+			"item": [
+				{
+					"name": "Chatting",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"prompt\": \"Привіт!\",\n    \"model\": \"llama3\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_uri_ngrok}}/ollama",
+							"host": [
+								"{{base_uri_ngrok}}"
+							],
+							"path": [
+								"ollama"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Basic",
+			"item": [
+				{
+					"name": "Home",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Home (GET {{base_uri_ngrok}})",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Response is JSON\", function () {",
+									"    pm.response.to.have.header(\"Content-Type\");",
+									"    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"try {",
+									"    var jsonData = pm.response.json();",
+									"    pm.test(\"Response has expected keys\", function () {",
+									"        pm.expect(Object.keys(jsonData).length).to.be.above(0);",
+									"    });",
+									"} catch (e) {",
+									"    pm.test(\"Response is valid JSON\", function () {",
+									"        pm.expect.fail(\"Response is not valid JSON\");",
+									"    });",
+									"}",
+									"pm.test(\"No error in response\", function () {",
+									"    pm.expect(pm.response.code).to.not.be.oneOf([400, 401, 403, 404, 500]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_uri_ngrok}}",
+							"host": [
+								"{{base_uri_ngrok}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_uri_ngrok}}/health",
+							"host": [
+								"{{base_uri_ngrok}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_local_uri",
+			"value": ""
+		},
+		{
+			"key": "base_uri_ngrok",
+			"value": ""
+		}
+	]
+}

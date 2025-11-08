@@ -1,6 +1,6 @@
 from typing import Union
-
 from fastapi import FastAPI
+from main import run_ollama
 
 app = FastAPI()
 
@@ -9,7 +9,24 @@ app = FastAPI()
 def read_root():
     return {"Hello": "World"}
 
+@app.post("/ollama/")
+def ollama_endpoint(request: dict):
+    prompt = request["prompt"]
+    model = request["model"]
+    response = run_ollama(prompt, model=model)
+    if response is None:
+        return {
+            "success": False,
+            "status_code": 500,
+            "error": "Failed to get response from Ollama."
+        }
+    return {
+        "success": True,
+        "status_code": 200,
+        "response": response
+    }
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+
+@app.get("/health/")
+def health_check():
+    return {"status": "ok"}
