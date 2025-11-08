@@ -13,7 +13,9 @@ def read_root():
 def ollama_endpoint(request: dict):
     prompt = request["prompt"]
     model = request["model"]
+    # print(prompt, model)
     response = run_ollama(prompt, model=model)
+    # print("Response from Ollama:", response)
     if response is None:
         return {
             "success": False,
